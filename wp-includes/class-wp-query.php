@@ -627,6 +627,7 @@ class WP_Query {
 	 * @since 4.9.0 Introduced the `$comment_count` parameter.
 	 * @since 5.1.0 Introduced the `$meta_compare_key` parameter.
 	 * @since 5.3.0 Introduced the `$meta_type_key` parameter.
+	 * @since 6.1.0 Introduced the `$update_menu_item_cache` parameter.
 	 *
 	 * @param string|array $query {
 	 *     Optional. Array or string of Query parameters.
@@ -664,19 +665,19 @@ class WP_Query {
 	 *                                                    excludes stickies from 'post__in'. Accepts 1|true, 0|false.
 	 *                                                    Default false.
 	 *     @type int             $m                       Combination YearMonth. Accepts any four-digit year and month
-	 *                                                    numbers 1-12. Default empty.
+	 *                                                    numbers 01-12. Default empty.
 	 *     @type string|string[] $meta_key                Meta key or keys to filter by.
 	 *     @type string|string[] $meta_value              Meta value or values to filter by.
 	 *     @type string          $meta_compare            MySQL operator used for comparing the meta value.
-	 *                                                    See WP_Meta_Query::__construct for accepted values and default value.
+	 *                                                    See WP_Meta_Query::__construct() for accepted values and default value.
 	 *     @type string          $meta_compare_key        MySQL operator used for comparing the meta key.
-	 *                                                    See WP_Meta_Query::__construct for accepted values and default value.
+	 *                                                    See WP_Meta_Query::__construct() for accepted values and default value.
 	 *     @type string          $meta_type               MySQL data type that the meta_value column will be CAST to for comparisons.
-	 *                                                    See WP_Meta_Query::__construct for accepted values and default value.
+	 *                                                    See WP_Meta_Query::__construct() for accepted values and default value.
 	 *     @type string          $meta_type_key           MySQL data type that the meta_key column will be CAST to for comparisons.
-	 *                                                    See WP_Meta_Query::__construct for accepted values and default value.
+	 *                                                    See WP_Meta_Query::__construct() for accepted values and default value.
 	 *     @type array           $meta_query              An associative array of WP_Meta_Query arguments.
-	 *                                                    See WP_Meta_Query::__construct for accepted values.
+	 *                                                    See WP_Meta_Query::__construct() for accepted values.
 	 *     @type int             $menu_order              The menu order of the posts.
 	 *     @type int             $minute                  Minute of the hour. Default empty. Accepts numbers 0-59.
 	 *     @type int             $monthnum                The two-digit month. Default empty. Accepts numbers 1-12.
@@ -752,10 +753,11 @@ class WP_Query {
 	 *     @type string[]        $tag_slug__in            An array of tag slugs (OR in). unless 'ignore_sticky_posts' is
 	 *                                                    true. Note: a string of comma-separated IDs will NOT work.
 	 *     @type array           $tax_query               An associative array of WP_Tax_Query arguments.
-	 *                                                    See WP_Tax_Query->__construct().
+	 *                                                    See WP_Tax_Query::__construct().
 	 *     @type string          $title                   Post title.
 	 *     @type bool            $update_post_meta_cache  Whether to update the post meta cache. Default true.
 	 *     @type bool            $update_post_term_cache  Whether to update the post term cache. Default true.
+	 *     @type bool            $update_menu_item_cache  Whether to update the menu item cache. Default false.
 	 *     @type bool            $lazy_load_term_meta     Whether to lazy-load term meta. Setting to false will
 	 *                                                    disable cache priming for term meta, so that each
 	 *                                                    get_term_meta() call will hit the database.
@@ -790,29 +792,41 @@ class WP_Query {
 			$qv['p'] = (int) $qv['p'];
 		}
 
-		$qv['page_id']  = absint( $qv['page_id'] );
-		$qv['year']     = absint( $qv['year'] );
-		$qv['monthnum'] = absint( $qv['monthnum'] );
-		$qv['day']      = absint( $qv['day'] );
-		$qv['w']        = absint( $qv['w'] );
+		$qv['page_id']  = is_scalar( $qv['page_id'] ) ? absint( $qv['page_id'] ) : 0;
+		$qv['year']     = is_scalar( $qv['year'] ) ? absint( $qv['year'] ) : 0;
+		$qv['monthnum'] = is_scalar( $qv['monthnum'] ) ? absint( $qv['monthnum'] ) : 0;
+		$qv['day']      = is_scalar( $qv['day'] ) ? absint( $qv['day'] ) : 0;
+		$qv['w']        = is_scalar( $qv['w'] ) ? absint( $qv['w'] ) : 0;
 		$qv['m']        = is_scalar( $qv['m'] ) ? preg_replace( '|[^0-9]|', '', $qv['m'] ) : '';
-		$qv['paged']    = absint( $qv['paged'] );
-		$qv['cat']      = preg_replace( '|[^0-9,-]|', '', $qv['cat'] );    // Comma-separated list of positive or negative integers.
-		$qv['author']   = preg_replace( '|[^0-9,-]|', '', $qv['author'] ); // Comma-separated list of positive or negative integers.
-		$qv['pagename'] = trim( $qv['pagename'] );
-		$qv['name']     = trim( $qv['name'] );
-		$qv['title']    = trim( $qv['title'] );
-		if ( '' !== $qv['hour'] ) {
+		$qv['paged']    = is_scalar( $qv['paged'] ) ? absint( $qv['paged'] ) : 0;
+		$qv['cat']      = preg_replace( '|[^0-9,-]|', '', $qv['cat'] ); // Array or comma-separated list of positive or negative integers.
+		$qv['author']   = is_scalar( $qv['author'] ) ? preg_replace( '|[^0-9,-]|', '', $qv['author'] ) : ''; // Comma-separated list of positive or negative integers.
+		$qv['pagename'] = is_scalar( $qv['pagename'] ) ? trim( $qv['pagename'] ) : '';
+		$qv['name']     = is_scalar( $qv['name'] ) ? trim( $qv['name'] ) : '';
+		$qv['title']    = is_scalar( $qv['title'] ) ? trim( $qv['title'] ) : '';
+
+		if ( is_scalar( $qv['hour'] ) && '' !== $qv['hour'] ) {
 			$qv['hour'] = absint( $qv['hour'] );
+		} else {
+			$qv['hour'] = '';
 		}
-		if ( '' !== $qv['minute'] ) {
+
+		if ( is_scalar( $qv['minute'] ) && '' !== $qv['minute'] ) {
 			$qv['minute'] = absint( $qv['minute'] );
+		} else {
+			$qv['minute'] = '';
 		}
-		if ( '' !== $qv['second'] ) {
+
+		if ( is_scalar( $qv['second'] ) && '' !== $qv['second'] ) {
 			$qv['second'] = absint( $qv['second'] );
+		} else {
+			$qv['second'] = '';
 		}
-		if ( '' !== $qv['menu_order'] ) {
+
+		if ( is_scalar( $qv['menu_order'] ) && '' !== $qv['menu_order'] ) {
 			$qv['menu_order'] = absint( $qv['menu_order'] );
+		} else {
+			$qv['menu_order'] = '';
 		}
 
 		// Fairly large, potentially too large, upper bound for search string lengths.
@@ -821,14 +835,14 @@ class WP_Query {
 		}
 
 		// Compat. Map subpost to attachment.
-		if ( '' != $qv['subpost'] ) {
+		if ( is_scalar( $qv['subpost'] ) && '' != $qv['subpost'] ) {
 			$qv['attachment'] = $qv['subpost'];
 		}
-		if ( '' != $qv['subpost_id'] ) {
+		if ( is_scalar( $qv['subpost_id'] ) && '' != $qv['subpost_id'] ) {
 			$qv['attachment_id'] = $qv['subpost_id'];
 		}
 
-		$qv['attachment_id'] = absint( $qv['attachment_id'] );
+		$qv['attachment_id'] = is_scalar( $qv['attachment_id'] ) ? absint( $qv['attachment_id'] ) : 0;
 
 		if ( ( '' !== $qv['attachment'] ) || ! empty( $qv['attachment_id'] ) ) {
 			$this->is_single     = true;
@@ -1869,6 +1883,10 @@ class WP_Query {
 
 		if ( ! isset( $q['update_post_term_cache'] ) ) {
 			$q['update_post_term_cache'] = true;
+		}
+
+		if ( ! isset( $q['update_menu_item_cache'] ) ) {
+			$q['update_menu_item_cache'] = false;
 		}
 
 		if ( ! isset( $q['lazy_load_term_meta'] ) ) {
@@ -3147,6 +3165,10 @@ class WP_Query {
 			$this->posts = array_map( 'get_post', $this->posts );
 		}
 
+		if ( ! empty( $this->posts ) && $q['update_menu_item_cache'] ) {
+			update_menu_item_cache( $this->posts );
+		}
+
 		if ( ! $q['suppress_filters'] ) {
 			/**
 			 * Filters the raw post results array, prior to status checks.
@@ -3434,6 +3456,11 @@ class WP_Query {
 	 */
 	public function the_post() {
 		global $post;
+
+		if ( ! $this->in_the_loop ) {
+			update_post_author_caches( $this->posts );
+		}
+
 		$this->in_the_loop = true;
 
 		if ( -1 == $this->current_post ) { // Loop has just started.
